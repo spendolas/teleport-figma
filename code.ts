@@ -24,18 +24,23 @@ const DEFAULT_CONFIG: SectionConfig = {
   vGap: 200,
 };
 
-const SECTION_PADDING = 240;
+const SECTION_PADDING = 400;
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function getPages(): Array<{ id: string; name: string }> {
-  return figma.root.children.map(p => ({ id: p.id, name: p.name }));
+function getPages(): Array<{ id: string; name: string; hasSections: boolean }> {
+  return figma.root.children.map(p => ({
+    id: p.id,
+    name: p.name,
+    hasSections: p.getPluginData('hasTeleportSections') === 'true',
+  }));
 }
 
-function getTeleportSections(pageId: string): SectionInfo[] {
+async function getTeleportSections(pageId: string): Promise<SectionInfo[]> {
   const page = figma.root.children.find(p => p.id === pageId);
   if (!page) return [];
-  return page.children
+  await page.loadAsync();
+  const sections = page.children
     .filter(n => n.type === 'SECTION' && n.getPluginData('teleport') === 'true')
     .map(n => {
       let config: SectionConfig | null = null;
@@ -45,13 +50,19 @@ function getTeleportSections(pageId: string): SectionInfo[] {
       }
       return { id: n.id, name: n.name, config };
     });
+
+  // Cache on page node for cheap lookup in getPages()
+  page.setPluginData('hasTeleportSections', sections.length > 0 ? 'true' : 'false');
+
+  return sections;
 }
 
-function createTeleportSection(
+async function createTeleportSection(
   page: PageNode,
   name: string,
   config: SectionConfig
-): SectionNode {
+): Promise<SectionNode> {
+  await page.loadAsync();
   const section = figma.createSection();
   section.name = name || 'Teleport';
   section.setPluginData('teleport', 'true');
@@ -111,9 +122,13 @@ function layoutVertical(nodes: SceneNode[], vGap: number): void {
 function layoutGrid(
   nodes: SceneNode[],
   cols: number,
+  rows: number,
   hGap: number,
   vGap: number
 ): void {
+  if (cols < 1 && rows > 0) {
+    cols = Math.ceil(nodes.length / rows);
+  }
   if (cols < 1) cols = 1;
 
   // Compute max width per column
@@ -146,9 +161,13 @@ function layoutGrid(
 function layoutMasonry(
   nodes: SceneNode[],
   cols: number,
+  rows: number,
   hGap: number,
   vGap: number
 ): void {
+  if (cols < 1 && rows > 0) {
+    cols = Math.ceil(nodes.length / rows);
+  }
   if (cols < 1) cols = 1;
 
   const maxWidth = Math.max(...nodes.map(n => n.width));
@@ -182,9 +201,9 @@ function arrangeNodes(nodes: SceneNode[], config: SectionConfig): void {
       break;
     case 'grid':
       if (config.masonry) {
-        layoutMasonry(nodes, config.columns, config.hGap, config.vGap);
+        layoutMasonry(nodes, config.columns, config.rows, config.hGap, config.vGap);
       } else {
-        layoutGrid(nodes, config.columns, config.hGap, config.vGap);
+        layoutGrid(nodes, config.columns, config.rows, config.hGap, config.vGap);
       }
       break;
   }
@@ -219,22 +238,26 @@ function resizeSectionToFit(section: SectionNode): void {
 
 // ── Bounding box of existing section content ─────────────────────────
 
-function getExistingBounds(section: SectionNode, excludeIds: Set<string>): { maxX: number; maxY: number } | null {
+function getExistingBounds(section: SectionNode, excludeIds: Set<string>): { minX: number; minY: number; maxX: number; maxY: number } | null {
   let hasExisting = false;
+  let minX = Infinity;
+  let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const child of section.children) {
     if (excludeIds.has(child.id)) continue;
     hasExisting = true;
+    minX = Math.min(minX, child.x);
+    minY = Math.min(minY, child.y);
     maxX = Math.max(maxX, child.x + child.width);
     maxY = Math.max(maxY, child.y + child.height);
   }
-  return hasExisting ? { maxX, maxY } : null;
+  return hasExisting ? { minX, minY, maxX, maxY } : null;
 }
 
 // ── Plugin init ──────────────────────────────────────────────────────
 
-figma.showUI(__html__, { width: 240, height: 340, themeColors: true });
+figma.showUI(__html__, { width: 240, height: 400, themeColors: true });
 
 figma.on('selectionchange', () => {
   figma.ui.postMessage({
@@ -243,7 +266,16 @@ figma.on('selectionchange', () => {
   });
 });
 
-figma.ui.onmessage = (msg: { type: string; [key: string]: unknown }) => {
+figma.on('currentpagechange', () => {
+  figma.ui.postMessage({
+    type: 'init-data',
+    pages: getPages(),
+    currentPageId: figma.currentPage.id,
+    selectionCount: figma.currentPage.selection.length,
+  });
+});
+
+figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
   // ── Init ───────────────────────────────────────────────────────
   if (msg.type === 'init') {
     figma.ui.postMessage({
@@ -257,9 +289,16 @@ figma.ui.onmessage = (msg: { type: string; [key: string]: unknown }) => {
 
   // ── Page selected ──────────────────────────────────────────────
   if (msg.type === 'page-selected') {
+    const sections = await getTeleportSections(msg.pageId as string);
     figma.ui.postMessage({
       type: 'sections-data',
-      sections: getTeleportSections(msg.pageId as string),
+      sections,
+    });
+    // Refresh page dropdown with updated dot indicators
+    figma.ui.postMessage({
+      type: 'pages-updated',
+      pages: getPages(),
+      currentPageId: figma.currentPage.id,
     });
     return;
   }
@@ -284,6 +323,8 @@ figma.ui.onmessage = (msg: { type: string; [key: string]: unknown }) => {
       return;
     }
 
+    await targetPage.loadAsync();
+
     const config: SectionConfig = {
       layout: msg.layout as SectionConfig['layout'],
       columns: msg.columns as number,
@@ -306,7 +347,7 @@ figma.ui.onmessage = (msg: { type: string; [key: string]: unknown }) => {
       }
       section = found;
     } else {
-      section = createTeleportSection(targetPage, msg.newSectionName as string, config);
+      section = await createTeleportSection(targetPage, msg.newSectionName as string, config);
     }
 
     // Prepare nodes
@@ -335,15 +376,22 @@ figma.ui.onmessage = (msg: { type: string; [key: string]: unknown }) => {
       const existingBounds = getExistingBounds(section, newIds);
       arrangeNodes(nodesToPlace, config);
       if (existingBounds) {
-        // Compute the extent of newly laid-out nodes
-        let newMaxY = 0;
-        for (const n of nodesToPlace) {
-          newMaxY = Math.max(newMaxY, n.y + n.height);
-        }
-        // Offset new items below existing content
-        const offsetY = existingBounds.maxY + config.vGap;
-        for (const n of nodesToPlace) {
-          n.y += offsetY;
+        if (config.layout === 'vertical') {
+          // Align X with existing, stack below
+          for (const n of nodesToPlace) {
+            n.x += existingBounds.minX;
+            n.y += existingBounds.maxY + config.vGap;
+          }
+        } else if (config.layout === 'horizontal') {
+          // Align Y with existing, append to the right
+          for (const n of nodesToPlace) {
+            n.x += existingBounds.maxX + config.hGap;
+            n.y += existingBounds.minY;
+          }
+        } else {
+          // Grid/masonry: rearrange all for correct placement
+          const allChildren = [...section.children] as SceneNode[];
+          arrangeNodes(allChildren, config);
         }
       }
     }
@@ -352,10 +400,25 @@ figma.ui.onmessage = (msg: { type: string; [key: string]: unknown }) => {
     updateSectionConfig(section, config);
     resizeSectionToFit(section);
 
+    // Mark target page as having teleport sections
+    targetPage.setPluginData('hasTeleportSections', 'true');
+
     const label = topLevel.length === 1 ? 'layer' : 'layers';
     const verb = mode === 'copy' ? 'copied' : 'teleported';
-    figma.notify(`${topLevel.length} ${label} ${verb}`);
+    const sectionRef = section;
+    const pageRef = targetPage;
+    figma.notify(`${topLevel.length} ${label} ${verb}`, {
+      button: {
+        text: 'Go there',
+        action: () => {
+          figma.setCurrentPageAsync(pageRef).then(() => {
+            figma.viewport.scrollAndZoomIntoView([sectionRef]);
+          });
+          return false;
+        },
+      },
+    });
 
-    figma.ui.postMessage({ type: 'done', count: topLevel.length });
+    figma.ui.postMessage({ type: 'done', count: topLevel.length, sectionId: section.id });
   }
 };

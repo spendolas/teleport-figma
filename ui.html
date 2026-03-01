@@ -15,9 +15,13 @@
       line-height: 16px;
       color: #242424;
       background: #ffffff;
+      padding: 10px 12px;
+      margin: 0;
+    }
+
+    #content-wrapper {
       display: flex;
       flex-direction: column;
-      padding: 10px 12px;
       gap: 12px;
     }
 
@@ -225,7 +229,7 @@
       input[type="text"],
       input[type="number"],
       select {
-        background: #383838;
+        background-color: #383838;
         color: #afafaf;
       }
 
@@ -279,6 +283,7 @@
   </style>
 </head>
 <body>
+<div id="content-wrapper">
 
   <!-- Page selector -->
   <div class="field">
@@ -364,15 +369,19 @@
     <button class="btn-secondary" id="btnCopy" disabled>Copy</button>
   </div>
 
+</div><!-- /content-wrapper -->
+
 <script>
   // ── State ──────────────────────────────────────────────────────────
 
   let selectionCount = 0;
   let currentPageId = '';
   let storedConfig = null; // config of currently selected existing section
+  let pendingSectionId = null; // auto-select this section after next sections-data
 
   // ── DOM refs ───────────────────────────────────────────────────────
 
+  const elWrapper = document.getElementById('content-wrapper');
   const elPage = document.getElementById('page');
   const elSection = document.getElementById('section');
   const elNameField = document.getElementById('nameField');
@@ -430,9 +439,10 @@
   }
 
   function updateRearrangeVisibility() {
-    if (!storedConfig || elSection.value === '__new__') {
+    if (!storedConfig || elSection.value === '__new__' || elSection.value === '__placeholder__') {
       elRearrangeField.classList.add('hidden');
       elRearrange.checked = false;
+      requestResize();
       return;
     }
     const current = getCurrentConfig();
@@ -445,12 +455,13 @@
       current.vGap !== storedConfig.vGap;
     elRearrangeField.classList.toggle('hidden', !changed);
     if (!changed) elRearrange.checked = false;
+    requestResize();
   }
 
   function getCurrentConfig() {
     return {
       layout: getActiveLayout(),
-      columns: parseInt(elColumns.value) || 3,
+      columns: parseInt(elColumns.value) || 0,
       rows: parseInt(elRows.value) || 0,
       masonry: elMasonry.checked,
       hGap: parseInt(elHGap.value) || 0,
@@ -466,8 +477,16 @@
       btn.classList.toggle('active', btn.dataset.value === config.layout);
     });
 
-    elColumns.value = config.columns || 3;
-    elRows.value = config.rows || '';
+    if (config.rows && config.rows > 0) {
+      elColumns.value = '';
+      elColumns.placeholder = 'Auto';
+      elRows.value = config.rows;
+    } else {
+      elColumns.value = config.columns || 3;
+      elColumns.placeholder = 'Auto';
+      elRows.value = '';
+      elRows.placeholder = 'Auto';
+    }
     elMasonry.checked = !!config.masonry;
     elHGap.value = config.hGap != null ? config.hGap : 40;
     elVGap.value = config.vGap != null ? config.vGap : 200;
@@ -482,20 +501,24 @@
 
   function updateButtons() {
     const hasPage = elPage.value && elPage.value !== '';
-    const enabled = selectionCount > 0 && hasPage;
+    const hasValidSection = elSection.value && elSection.value !== '__placeholder__';
+    const enabled = selectionCount > 0 && hasPage && hasValidSection;
     elBtnTeleport.disabled = !enabled;
     elBtnCopy.disabled = !enabled;
   }
 
   function requestResize() {
-    // Defer so the DOM has updated
+    // Double-RAF ensures CSS layout has fully settled before measuring
     requestAnimationFrame(() => {
-      const height = document.body.scrollHeight + 4;
-      parent.postMessage({ pluginMessage: { type: 'resize', height } }, '*');
+      requestAnimationFrame(() => {
+        const height = elWrapper.offsetHeight + 20 + 8; // 20 = body padding (10+10), 8 = buffer
+        parent.postMessage({ pluginMessage: { type: 'resize', height } }, '*');
+      });
     });
   }
 
   function doTeleport(mode) {
+    if (elSection.value === '__placeholder__') return;
     const targetSectionId = elSection.value === '__new__' ? null : elSection.value;
     parent.postMessage({
       pluginMessage: {
@@ -534,7 +557,9 @@
 
   // Section dropdown
   elSection.addEventListener('change', () => {
-    if (elSection.value === '__new__') {
+    if (elSection.value === '__placeholder__') {
+      storedConfig = null;
+    } else if (elSection.value === '__new__') {
       resetToDefaults();
     } else {
       // Find stored config from section options
@@ -552,10 +577,27 @@
       }
     }
     updateFieldVisibility();
+    updateButtons();
   });
 
-  // Settings change -> update rearrange visibility
-  [elColumns, elRows, elHGap, elVGap].forEach(el => {
+  // Columns/Rows mutual exclusivity
+  elColumns.addEventListener('input', () => {
+    if (elColumns.value && parseInt(elColumns.value) > 0) {
+      elRows.value = '';
+      elRows.placeholder = 'Auto';
+    }
+    updateRearrangeVisibility();
+  });
+  elRows.addEventListener('input', () => {
+    if (elRows.value && parseInt(elRows.value) > 0) {
+      elColumns.value = '';
+      elColumns.placeholder = 'Auto';
+    }
+    updateRearrangeVisibility();
+  });
+
+  // Other settings change -> update rearrange visibility
+  [elHGap, elVGap].forEach(el => {
     el.addEventListener('input', updateRearrangeVisibility);
   });
   elMasonry.addEventListener('change', updateRearrangeVisibility);
@@ -574,9 +616,11 @@
       currentPageId = msg.currentPageId;
       selectionCount = msg.selectionCount;
 
-      // Populate page dropdown (exclude current page)
+      // Populate page dropdown (all pages, current page disabled)
       elPage.innerHTML = '';
-      const otherPages = msg.pages.filter(p => p.id !== currentPageId);
+      const allPages = msg.pages || [];
+      const otherPages = allPages.filter(p => p.id !== currentPageId);
+
       if (otherPages.length === 0) {
         const opt = document.createElement('option');
         opt.value = '';
@@ -585,14 +629,21 @@
         opt.textContent = 'No other pages';
         elPage.appendChild(opt);
       } else {
-        otherPages.forEach((p, i) => {
+        let firstOther = true;
+        // All pages in natural order; current page disabled
+        allPages.forEach(p => {
           const opt = document.createElement('option');
           opt.value = p.id;
-          opt.textContent = p.name;
-          if (i === 0) opt.selected = true;
+          if (p.id === currentPageId) {
+            opt.disabled = true;
+            opt.textContent = p.name + ' (current)';
+          } else {
+            opt.textContent = p.hasSections ? p.name + ' \u2022' : p.name;
+            if (firstOther) { opt.selected = true; firstOther = false; }
+          }
           elPage.appendChild(opt);
         });
-        // Trigger section fetch for the first page
+        // Trigger section fetch for the first selectable page
         parent.postMessage({ pluginMessage: { type: 'page-selected', pageId: otherPages[0].id } }, '*');
       }
 
@@ -600,27 +651,99 @@
       requestResize();
     }
 
+    if (msg.type === 'pages-updated') {
+      // Refresh page dropdown with updated dot indicators, preserve selection
+      const selectedPageId = elPage.value;
+      currentPageId = msg.currentPageId;
+      elPage.innerHTML = '';
+      const allPages = msg.pages || [];
+      const otherPages = allPages.filter(p => p.id !== currentPageId);
+
+      if (otherPages.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.disabled = true;
+        opt.selected = true;
+        opt.textContent = 'No other pages';
+        elPage.appendChild(opt);
+      } else {
+        // All pages in natural order; current page disabled, preserve selection
+        allPages.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          if (p.id === currentPageId) {
+            opt.disabled = true;
+            opt.textContent = p.name + ' (current)';
+          } else {
+            opt.textContent = p.hasSections ? p.name + ' \u2022' : p.name;
+            if (p.id === selectedPageId) opt.selected = true;
+          }
+          elPage.appendChild(opt);
+        });
+        // Fallback: if nothing selected, pick first non-disabled
+        if (!elPage.value || elPage.value === currentPageId) {
+          const firstEnabled = elPage.querySelector('option:not([disabled])');
+          if (firstEnabled) firstEnabled.selected = true;
+        }
+      }
+    }
+
     if (msg.type === 'sections-data') {
       elSection.innerHTML = '';
-      const newOpt = document.createElement('option');
-      newOpt.value = '__new__';
-      newOpt.textContent = '+ New section';
-      elSection.appendChild(newOpt);
 
-      msg.sections.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.name;
-        if (s.config) {
-          opt.dataset.config = JSON.stringify(s.config);
+      if (msg.sections.length > 0) {
+        // Placeholder
+        const placeholder = document.createElement('option');
+        placeholder.value = '__placeholder__';
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        placeholder.textContent = 'Select target';
+        elSection.appendChild(placeholder);
+
+        // Existing sections
+        msg.sections.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name;
+          if (s.config) {
+            opt.dataset.config = JSON.stringify(s.config);
+          }
+          elSection.appendChild(opt);
+        });
+
+        // New section at bottom
+        const newOpt = document.createElement('option');
+        newOpt.value = '__new__';
+        newOpt.textContent = '+ New section';
+        elSection.appendChild(newOpt);
+      } else {
+        // No sections — just show "+ New section"
+        const newOpt = document.createElement('option');
+        newOpt.value = '__new__';
+        newOpt.textContent = '+ New section';
+        elSection.appendChild(newOpt);
+      }
+
+      // Auto-select section if we just teleported to it
+      if (pendingSectionId) {
+        const match = elSection.querySelector('option[value="' + pendingSectionId + '"]');
+        if (match) {
+          match.selected = true;
+          // Load its stored config
+          const configStr = match.dataset.config;
+          if (configStr) {
+            try { storedConfig = JSON.parse(configStr); loadConfig(storedConfig); }
+            catch (_e) { storedConfig = null; }
+          } else {
+            storedConfig = null;
+          }
         }
-        elSection.appendChild(opt);
-      });
-
-      // Reset to "New section" state
-      elSection.value = '__new__';
-      storedConfig = null;
+        pendingSectionId = null;
+      } else {
+        storedConfig = null;
+      }
       updateFieldVisibility();
+      updateButtons();
     }
 
     if (msg.type === 'selection-changed') {
@@ -629,6 +752,8 @@
     }
 
     if (msg.type === 'done') {
+      // Remember which section was used so we can re-select it
+      pendingSectionId = msg.sectionId || null;
       // Re-fetch sections since a new one may have been created
       if (elPage.value) {
         parent.postMessage({ pluginMessage: { type: 'page-selected', pageId: elPage.value } }, '*');
