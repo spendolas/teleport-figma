@@ -1,0 +1,9 @@
+*.log
+*.log.*
+node_modules
+
+code.js
+teleport.zip
+
+.DS_Store
+.claude/

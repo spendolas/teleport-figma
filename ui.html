@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Inter, sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 16px;
+      color: #242424;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      padding: 10px 12px;
+      gap: 12px;
+    }
+
+    /* ── Labels ─────────────────────────────────────────── */
+
+    label {
+      font-size: 11px;
+      color: #242424;
+      opacity: 0.5;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    /* ── Inputs & Selects ──────────────────────────────── */
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      height: 32px;
+      border: none;
+      border-radius: 4px;
+      padding: 0 8px;
+      font-family: Inter, sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      color: #242424;
+      background: rgba(36, 36, 36, 0.2);
+      outline: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+    }
+
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0.5 0.5L4 4L7.5 0.5' stroke='%23242424' stroke-opacity='0.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 26px;
+    }
+
+    input[type="text"]::placeholder,
+    input[type="number"]::placeholder {
+      color: #242424;
+      opacity: 0.5;
+    }
+
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+
+    /* ── Segmented control ─────────────────────────────── */
+
+    .segmented {
+      display: flex;
+      height: 32px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: rgba(36, 36, 36, 0.2);
+    }
+
+    .seg-btn {
+      flex: 1;
+      height: 32px;
+      border: none;
+      background: transparent;
+      color: #242424;
+      font-family: Inter, sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .seg-btn:hover {
+      opacity: 0.8;
+    }
+
+    .seg-btn.active {
+      background: #242424;
+      color: #ffffff;
+    }
+
+    /* ── Checkbox ───────────────────────────────────────── */
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      display: none;
+    }
+
+    .checkmark {
+      width: 20px;
+      height: 20px;
+      border: 1px solid #242424;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .checkbox-label input[type="checkbox"]:checked + .checkmark {
+      background: rgba(36, 36, 36, 0.2);
+      border-color: transparent;
+    }
+
+    .checkbox-label input[type="checkbox"]:checked + .checkmark::after {
+      content: '';
+      width: 10px;
+      height: 10px;
+      background: #242424;
+      border-radius: 1px;
+    }
+
+    /* ── Layout helpers ─────────────────────────────────── */
+
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .split-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .half {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* ── Buttons ────────────────────────────────────────── */
+
+    .btn-primary,
+    .btn-secondary {
+      width: 100%;
+      height: 32px;
+      border: none;
+      border-radius: 4px;
+      font-family: Inter, sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #242424;
+      color: #ffffff;
+    }
+
+    .btn-secondary {
+      background: rgba(36, 36, 36, 0.2);
+      color: #242424;
+    }
+
+    .btn-primary:hover,
+    .btn-secondary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-primary:disabled,
+    .btn-secondary:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    /* ── Button group (no gap between the two CTAs) ────── */
+
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* ── Dark mode ──────────────────────────────────────── */
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #242424;
+        color: #afafaf;
+      }
+
+      label {
+        color: #afafaf;
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select {
+        background: #383838;
+        color: #afafaf;
+      }
+
+      select {
+        background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0.5 0.5L4 4L7.5 0.5' stroke='%23afafaf' stroke-opacity='0.5'/%3E%3C/svg%3E");
+        background-color: #383838;
+      }
+
+      input[type="text"]::placeholder,
+      input[type="number"]::placeholder {
+        color: #afafaf;
+        opacity: 0.5;
+      }
+
+      .segmented {
+        background: #383838;
+      }
+
+      .seg-btn {
+        color: #afafaf;
+      }
+
+      .seg-btn.active {
+        background: #3c8ae8;
+        color: #ffffff;
+      }
+
+      .checkmark {
+        border-color: #808080;
+      }
+
+      .checkbox-label input[type="checkbox"]:checked + .checkmark {
+        background: #383838;
+        border-color: transparent;
+      }
+
+      .checkbox-label input[type="checkbox"]:checked + .checkmark::after {
+        background: #afafaf;
+      }
+
+      .btn-primary {
+        background: #3c8ae8;
+        color: #ffffff;
+      }
+
+      .btn-secondary {
+        background: #383838;
+        color: #afafaf;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Page selector -->
+  <div class="field">
+    <label>Page</label>
+    <select id="page">
+      <option value="" disabled selected>No other pages</option>
+    </select>
+  </div>
+
+  <!-- Section selector -->
+  <div class="field">
+    <label>Section</label>
+    <select id="section">
+      <option value="__new__">+ New section</option>
+    </select>
+  </div>
+
+  <!-- New section name -->
+  <div class="field" id="nameField">
+    <label>Name</label>
+    <input type="text" id="sectionName" value="Teleport" placeholder="Section name">
+  </div>
+
+  <!-- Layout mode -->
+  <div class="field">
+    <label>Layout</label>
+    <div class="segmented" id="layoutMode">
+      <button class="seg-btn active" data-value="horizontal">Horizontal</button>
+      <button class="seg-btn" data-value="vertical">Vertical</button>
+      <button class="seg-btn" data-value="grid">Grid</button>
+    </div>
+  </div>
+
+  <!-- Grid: columns & rows -->
+  <div class="field hidden" id="gridOptions">
+    <div class="split-row">
+      <div class="half">
+        <label>Columns</label>
+        <input type="number" id="columns" value="3" min="1">
+      </div>
+      <div class="half">
+        <label>Rows</label>
+        <input type="number" id="rows" value="" placeholder="Auto" min="0">
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid: masonry -->
+  <div class="field hidden" id="masonryField">
+    <label class="checkbox-label">
+      <input type="checkbox" id="masonry">
+      <span class="checkmark"></span>
+      Masonry
+    </label>
+  </div>
+
+  <!-- Spacing -->
+  <div class="field" id="spacingField">
+    <div class="split-row">
+      <div class="half" id="hGapField">
+        <label>H gap</label>
+        <input type="number" id="hGap" value="40" min="0">
+      </div>
+      <div class="half hidden" id="vGapField">
+        <label>V gap</label>
+        <input type="number" id="vGap" value="200" min="0">
+      </div>
+    </div>
+  </div>
+
+  <!-- Rearrange existing (conditional) -->
+  <div class="field hidden" id="rearrangeField">
+    <label class="checkbox-label">
+      <input type="checkbox" id="rearrange">
+      <span class="checkmark"></span>
+      Rearrange existing items
+    </label>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="button-group">
+    <button class="btn-primary" id="btnTeleport" disabled>Teleport</button>
+    <button class="btn-secondary" id="btnCopy" disabled>Copy</button>
+  </div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────
+
+  let selectionCount = 0;
+  let currentPageId = '';
+  let storedConfig = null; // config of currently selected existing section
+
+  // ── DOM refs ───────────────────────────────────────────────────────
+
+  const elPage = document.getElementById('page');
+  const elSection = document.getElementById('section');
+  const elNameField = document.getElementById('nameField');
+  const elSectionName = document.getElementById('sectionName');
+  const elLayoutMode = document.getElementById('layoutMode');
+  const elGridOptions = document.getElementById('gridOptions');
+  const elMasonryField = document.getElementById('masonryField');
+  const elHGapField = document.getElementById('hGapField');
+  const elVGapField = document.getElementById('vGapField');
+  const elColumns = document.getElementById('columns');
+  const elRows = document.getElementById('rows');
+  const elMasonry = document.getElementById('masonry');
+  const elHGap = document.getElementById('hGap');
+  const elVGap = document.getElementById('vGap');
+  const elRearrangeField = document.getElementById('rearrangeField');
+  const elRearrange = document.getElementById('rearrange');
+  const elBtnTeleport = document.getElementById('btnTeleport');
+  const elBtnCopy = document.getElementById('btnCopy');
+
+  // ── Helpers ────────────────────────────────────────────────────────
+
+  function getActiveLayout() {
+    const active = elLayoutMode.querySelector('.seg-btn.active');
+    return active ? active.dataset.value : 'horizontal';
+  }
+
+  function updateFieldVisibility() {
+    const layout = getActiveLayout();
+    const isGrid = layout === 'grid';
+    const isHorizontal = layout === 'horizontal';
+    const isVertical = layout === 'vertical';
+
+    elGridOptions.classList.toggle('hidden', !isGrid);
+    elMasonryField.classList.toggle('hidden', !isGrid);
+
+    // Spacing: horizontal shows only H gap, vertical shows only V gap, grid shows both
+    if (isHorizontal) {
+      elHGapField.classList.remove('hidden');
+      elVGapField.classList.add('hidden');
+    } else if (isVertical) {
+      elHGapField.classList.add('hidden');
+      elVGapField.classList.remove('hidden');
+    } else {
+      elHGapField.classList.remove('hidden');
+      elVGapField.classList.remove('hidden');
+    }
+
+    // Name field: only when "New section"
+    elNameField.classList.toggle('hidden', elSection.value !== '__new__');
+
+    // Rearrange: only when existing section + settings differ
+    updateRearrangeVisibility();
+
+    requestResize();
+  }
+
+  function updateRearrangeVisibility() {
+    if (!storedConfig || elSection.value === '__new__') {
+      elRearrangeField.classList.add('hidden');
+      elRearrange.checked = false;
+      return;
+    }
+    const current = getCurrentConfig();
+    const changed =
+      current.layout !== storedConfig.layout ||
+      current.columns !== storedConfig.columns ||
+      current.rows !== storedConfig.rows ||
+      current.masonry !== storedConfig.masonry ||
+      current.hGap !== storedConfig.hGap ||
+      current.vGap !== storedConfig.vGap;
+    elRearrangeField.classList.toggle('hidden', !changed);
+    if (!changed) elRearrange.checked = false;
+  }
+
+  function getCurrentConfig() {
+    return {
+      layout: getActiveLayout(),
+      columns: parseInt(elColumns.value) || 3,
+      rows: parseInt(elRows.value) || 0,
+      masonry: elMasonry.checked,
+      hGap: parseInt(elHGap.value) || 0,
+      vGap: parseInt(elVGap.value) || 0,
+    };
+  }
+
+  function loadConfig(config) {
+    if (!config) return;
+
+    // Set layout mode
+    elLayoutMode.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.value === config.layout);
+    });
+
+    elColumns.value = config.columns || 3;
+    elRows.value = config.rows || '';
+    elMasonry.checked = !!config.masonry;
+    elHGap.value = config.hGap != null ? config.hGap : 40;
+    elVGap.value = config.vGap != null ? config.vGap : 200;
+
+    updateFieldVisibility();
+  }
+
+  function resetToDefaults() {
+    storedConfig = null;
+    loadConfig({ layout: 'horizontal', columns: 3, rows: 0, masonry: false, hGap: 40, vGap: 200 });
+  }
+
+  function updateButtons() {
+    const hasPage = elPage.value && elPage.value !== '';
+    const enabled = selectionCount > 0 && hasPage;
+    elBtnTeleport.disabled = !enabled;
+    elBtnCopy.disabled = !enabled;
+  }
+
+  function requestResize() {
+    // Defer so the DOM has updated
+    requestAnimationFrame(() => {
+      const height = document.body.scrollHeight + 4;
+      parent.postMessage({ pluginMessage: { type: 'resize', height } }, '*');
+    });
+  }
+
+  function doTeleport(mode) {
+    const targetSectionId = elSection.value === '__new__' ? null : elSection.value;
+    parent.postMessage({
+      pluginMessage: {
+        type: 'teleport',
+        targetPageId: elPage.value,
+        targetSectionId,
+        newSectionName: elSectionName.value || 'Teleport',
+        mode,
+        layout: getActiveLayout(),
+        columns: parseInt(elColumns.value) || 3,
+        rows: parseInt(elRows.value) || 0,
+        masonry: elMasonry.checked,
+        hGap: parseInt(elHGap.value) || 0,
+        vGap: parseInt(elVGap.value) || 0,
+        rearrange: elRearrange.checked,
+      }
+    }, '*');
+  }
+
+  // ── Event listeners ────────────────────────────────────────────────
+
+  // Segmented control: layout mode
+  elLayoutMode.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      elLayoutMode.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateFieldVisibility();
+    });
+  });
+
+  // Page dropdown
+  elPage.addEventListener('change', () => {
+    parent.postMessage({ pluginMessage: { type: 'page-selected', pageId: elPage.value } }, '*');
+    updateButtons();
+  });
+
+  // Section dropdown
+  elSection.addEventListener('change', () => {
+    if (elSection.value === '__new__') {
+      resetToDefaults();
+    } else {
+      // Find stored config from section options
+      const opt = elSection.options[elSection.selectedIndex];
+      const configStr = opt.dataset.config;
+      if (configStr) {
+        try {
+          storedConfig = JSON.parse(configStr);
+          loadConfig(storedConfig);
+        } catch (_e) {
+          storedConfig = null;
+        }
+      } else {
+        storedConfig = null;
+      }
+    }
+    updateFieldVisibility();
+  });
+
+  // Settings change -> update rearrange visibility
+  [elColumns, elRows, elHGap, elVGap].forEach(el => {
+    el.addEventListener('input', updateRearrangeVisibility);
+  });
+  elMasonry.addEventListener('change', updateRearrangeVisibility);
+
+  // Action buttons
+  elBtnTeleport.addEventListener('click', () => doTeleport('move'));
+  elBtnCopy.addEventListener('click', () => doTeleport('copy'));
+
+  // ── Messages from plugin ───────────────────────────────────────────
+
+  window.onmessage = (event) => {
+    const msg = event.data.pluginMessage;
+    if (!msg) return;
+
+    if (msg.type === 'init-data') {
+      currentPageId = msg.currentPageId;
+      selectionCount = msg.selectionCount;
+
+      // Populate page dropdown (exclude current page)
+      elPage.innerHTML = '';
+      const otherPages = msg.pages.filter(p => p.id !== currentPageId);
+      if (otherPages.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.disabled = true;
+        opt.selected = true;
+        opt.textContent = 'No other pages';
+        elPage.appendChild(opt);
+      } else {
+        otherPages.forEach((p, i) => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.name;
+          if (i === 0) opt.selected = true;
+          elPage.appendChild(opt);
+        });
+        // Trigger section fetch for the first page
+        parent.postMessage({ pluginMessage: { type: 'page-selected', pageId: otherPages[0].id } }, '*');
+      }
+
+      updateButtons();
+      requestResize();
+    }
+
+    if (msg.type === 'sections-data') {
+      elSection.innerHTML = '';
+      const newOpt = document.createElement('option');
+      newOpt.value = '__new__';
+      newOpt.textContent = '+ New section';
+      elSection.appendChild(newOpt);
+
+      msg.sections.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        if (s.config) {
+          opt.dataset.config = JSON.stringify(s.config);
+        }
+        elSection.appendChild(opt);
+      });
+
+      // Reset to "New section" state
+      elSection.value = '__new__';
+      storedConfig = null;
+      updateFieldVisibility();
+    }
+
+    if (msg.type === 'selection-changed') {
+      selectionCount = msg.selectionCount;
+      updateButtons();
+    }
+
+    if (msg.type === 'done') {
+      // Re-fetch sections since a new one may have been created
+      if (elPage.value) {
+        parent.postMessage({ pluginMessage: { type: 'page-selected', pageId: elPage.value } }, '*');
+      }
+    }
+  };
+
+  // ── Init ───────────────────────────────────────────────────────────
+
+  parent.postMessage({ pluginMessage: { type: 'init' } }, '*');
+</script>
+</body>
+</html>
