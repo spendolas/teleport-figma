@@ -1,6 +1,6 @@
 # Teleport
 
-A Figma plugin that sends selected layers to a dedicated section on another page in the same file, with automatic layout formatting.
+A Figma plugin that sends selected layers to a dedicated section on any page in the same file, with automatic layout formatting.
 
 ## Install
 
