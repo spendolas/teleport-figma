@@ -87,9 +87,23 @@ function updateSectionConfig(section: SectionNode, config: SectionConfig): void 
   section.setPluginData('teleport-config', JSON.stringify(config));
 }
 
+// Sort nodes by visual canvas position: left-to-right, top-to-bottom (reading order).
+// Items at similar Y positions (within 50% of the shorter item's height) are treated
+// as the same row and sorted by X within that row.
+function sortByVisualPosition(nodes: SceneNode[]): SceneNode[] {
+  const sorted = [...nodes];
+  sorted.sort((a, b) => {
+    const rowThreshold = Math.min(a.height, b.height) * 0.5;
+    const dy = a.y - b.y;
+    if (Math.abs(dy) > rowThreshold) return dy; // different rows: top first
+    return a.x - b.x; // same row: left first
+  });
+  return sorted;
+}
+
 function getTopLevelSelection(selection: readonly SceneNode[]): SceneNode[] {
   const idSet = new Set(selection.map(n => n.id));
-  return selection.filter(node => {
+  const filtered = selection.filter(node => {
     let parent = node.parent;
     while (parent && parent.type !== 'PAGE' && parent.type !== 'DOCUMENT') {
       if (idSet.has(parent.id)) return false;
@@ -97,6 +111,8 @@ function getTopLevelSelection(selection: readonly SceneNode[]): SceneNode[] {
     }
     return true;
   });
+  // Sort by visual position on canvas (reading order: left-to-right, top-to-bottom)
+  return sortByVisualPosition(filtered);
 }
 
 // ── Layout algorithms ────────────────────────────────────────────────
@@ -268,7 +284,7 @@ figma.on('selectionchange', () => {
 
 figma.on('currentpagechange', () => {
   figma.ui.postMessage({
-    type: 'init-data',
+    type: 'page-changed',
     pages: getPages(),
     currentPageId: figma.currentPage.id,
     selectionCount: figma.currentPage.selection.length,
@@ -351,7 +367,35 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
     }
 
     // Prepare nodes
-    const topLevel = getTopLevelSelection(selection);
+    let topLevel = getTopLevelSelection(selection);
+
+    // Same-page safeguards: filter out target section, its ancestors, and items already inside it
+    const isSamePage = targetPage.id === figma.currentPage.id;
+    if (isSamePage && msg.targetSectionId) {
+      const sectionId = section.id;
+      const beforeCount = topLevel.length;
+      topLevel = topLevel.filter(node => {
+        // Exclude the target section itself
+        if (node.id === sectionId) return false;
+        // Exclude ancestors of the target section
+        let s: BaseNode = section;
+        while (s.parent && s.parent.type !== 'PAGE') {
+          if (s.parent.id === node.id) return false;
+          s = s.parent;
+        }
+        // Exclude items already inside the target section
+        if (node.parent && node.parent.id === sectionId) return false;
+        return true;
+      });
+      if (topLevel.length === 0) {
+        figma.notify('No valid layers to teleport');
+        return;
+      }
+      if (topLevel.length < beforeCount) {
+        figma.notify(`Skipped ${beforeCount - topLevel.length} layer(s) already in target`);
+      }
+    }
+
     const nodesToPlace: SceneNode[] = [];
     for (const node of topLevel) {
       if (mode === 'copy') {
@@ -361,15 +405,16 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
       }
     }
 
-    // Append to section
+    // Append to section (ascending index order preserves stacking)
     const newIds = new Set(nodesToPlace.map(n => n.id));
     for (const node of nodesToPlace) {
       section.appendChild(node);
     }
 
+    // Layout: visual-position sort gives reading order (L→R, T→B) matching layout[0] = first position
     if (rearrange) {
-      // Re-layout ALL children
-      const allChildren = [...section.children] as SceneNode[];
+      // Re-layout ALL children sorted by visual position
+      const allChildren = sortByVisualPosition([...section.children] as SceneNode[]);
       arrangeNodes(allChildren, config);
     } else {
       // Layout only new nodes, offset past existing content
@@ -390,7 +435,7 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
           }
         } else {
           // Grid/masonry: rearrange all for correct placement
-          const allChildren = [...section.children] as SceneNode[];
+          const allChildren = sortByVisualPosition([...section.children] as SceneNode[]);
           arrangeNodes(allChildren, config);
         }
       }

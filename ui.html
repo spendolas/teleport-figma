@@ -287,7 +287,7 @@
 
   <!-- Page selector -->
   <div class="field">
-    <label>Page</label>
+    <label>Destination page</label>
     <select id="page">
       <option value="" disabled selected>No other pages</option>
     </select>
@@ -616,35 +616,34 @@
       currentPageId = msg.currentPageId;
       selectionCount = msg.selectionCount;
 
-      // Populate page dropdown (all pages, current page disabled)
+      // Populate page dropdown (all pages selectable, current page labeled)
       elPage.innerHTML = '';
       const allPages = msg.pages || [];
-      const otherPages = allPages.filter(p => p.id !== currentPageId);
 
-      if (otherPages.length === 0) {
+      if (allPages.length === 0) {
         const opt = document.createElement('option');
         opt.value = '';
         opt.disabled = true;
         opt.selected = true;
-        opt.textContent = 'No other pages';
+        opt.textContent = 'No pages';
         elPage.appendChild(opt);
       } else {
-        let firstOther = true;
-        // All pages in natural order; current page disabled
         allPages.forEach(p => {
           const opt = document.createElement('option');
           opt.value = p.id;
-          if (p.id === currentPageId) {
-            opt.disabled = true;
-            opt.textContent = p.name + ' (current)';
-          } else {
-            opt.textContent = p.hasSections ? p.name + ' \u2022' : p.name;
-            if (firstOther) { opt.selected = true; firstOther = false; }
-          }
+          let name = p.name;
+          if (p.id === currentPageId) name += ' (current)';
+          if (p.hasSections) name += ' \u2022';
+          opt.textContent = name;
+          if (p.id === currentPageId) opt.selected = true;
           elPage.appendChild(opt);
         });
-        // Trigger section fetch for the first selectable page
-        parent.postMessage({ pluginMessage: { type: 'page-selected', pageId: otherPages[0].id } }, '*');
+        // If no current page found, select first
+        if (!elPage.value) {
+          elPage.options[0].selected = true;
+        }
+        // Trigger section fetch for the selected page
+        parent.postMessage({ pluginMessage: { type: 'page-selected', pageId: elPage.value } }, '*');
       }
 
       updateButtons();
@@ -657,35 +656,70 @@
       currentPageId = msg.currentPageId;
       elPage.innerHTML = '';
       const allPages = msg.pages || [];
-      const otherPages = allPages.filter(p => p.id !== currentPageId);
 
-      if (otherPages.length === 0) {
+      if (allPages.length === 0) {
         const opt = document.createElement('option');
         opt.value = '';
         opt.disabled = true;
         opt.selected = true;
-        opt.textContent = 'No other pages';
+        opt.textContent = 'No pages';
         elPage.appendChild(opt);
       } else {
-        // All pages in natural order; current page disabled, preserve selection
         allPages.forEach(p => {
           const opt = document.createElement('option');
           opt.value = p.id;
-          if (p.id === currentPageId) {
-            opt.disabled = true;
-            opt.textContent = p.name + ' (current)';
-          } else {
-            opt.textContent = p.hasSections ? p.name + ' \u2022' : p.name;
-            if (p.id === selectedPageId) opt.selected = true;
-          }
+          let name = p.name;
+          if (p.id === currentPageId) name += ' (current)';
+          if (p.hasSections) name += ' \u2022';
+          opt.textContent = name;
+          if (p.id === selectedPageId) opt.selected = true;
           elPage.appendChild(opt);
         });
-        // Fallback: if nothing selected, pick first non-disabled
-        if (!elPage.value || elPage.value === currentPageId) {
-          const firstEnabled = elPage.querySelector('option:not([disabled])');
-          if (firstEnabled) firstEnabled.selected = true;
+        // Fallback: if previous selection not found, select current page or first
+        if (!elPage.value) {
+          const currentOpt = elPage.querySelector('option[value="' + currentPageId + '"]');
+          if (currentOpt) currentOpt.selected = true;
+          else if (elPage.options[0]) elPage.options[0].selected = true;
         }
       }
+    }
+
+    if (msg.type === 'page-changed') {
+      // Page navigated in Figma — update labels and selection count but keep target selection
+      const selectedPageId = elPage.value;
+      currentPageId = msg.currentPageId;
+      selectionCount = msg.selectionCount;
+      elPage.innerHTML = '';
+      const allPages = msg.pages || [];
+
+      if (allPages.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.disabled = true;
+        opt.selected = true;
+        opt.textContent = 'No pages';
+        elPage.appendChild(opt);
+      } else {
+        allPages.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          let name = p.name;
+          if (p.id === currentPageId) name += ' (current)';
+          if (p.hasSections) name += ' \u2022';
+          opt.textContent = name;
+          if (p.id === selectedPageId) opt.selected = true;
+          elPage.appendChild(opt);
+        });
+        // Fallback: if previous selection not found, select current page or first
+        if (!elPage.value) {
+          const currentOpt = elPage.querySelector('option[value="' + currentPageId + '"]');
+          if (currentOpt) currentOpt.selected = true;
+          else if (elPage.options[0]) elPage.options[0].selected = true;
+        }
+      }
+
+      updateButtons();
+      requestResize();
     }
 
     if (msg.type === 'sections-data') {
