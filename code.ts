@@ -7,6 +7,7 @@ interface SectionConfig {
   masonry: boolean;
   hGap: number;
   vGap: number;
+  startNew?: boolean;
 }
 
 interface SectionInfo {
@@ -225,6 +226,18 @@ function arrangeNodes(nodes: SceneNode[], config: SectionConfig): void {
   }
 }
 
+// ── Layer panel ordering ─────────────────────────────────────────────
+
+function reorderChildrenByVisualPosition(section: SectionNode): void {
+  const sorted = sortByVisualPosition([...section.children] as SceneNode[]);
+  // In Figma: last child = top of layers panel.
+  // We want sorted[0] (top-left) at the top of the panel (last child index).
+  // Appending in reverse visual order achieves this.
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    section.appendChild(sorted[i]);
+  }
+}
+
 // ── Section resizing ─────────────────────────────────────────────────
 
 function resizeSectionToFit(section: SectionNode): void {
@@ -348,10 +361,12 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
       masonry: msg.masonry as boolean,
       hGap: msg.hGap as number,
       vGap: msg.vGap as number,
+      startNew: msg.startNew as boolean,
     };
 
     const mode = msg.mode as 'move' | 'copy';
     const rearrange = msg.rearrange as boolean;
+    const startNew = msg.startNew as boolean;
 
     // Get or create section
     let section: SectionNode;
@@ -422,16 +437,32 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
       arrangeNodes(nodesToPlace, config);
       if (existingBounds) {
         if (config.layout === 'vertical') {
-          // Align X with existing, stack below
-          for (const n of nodesToPlace) {
-            n.x += existingBounds.minX;
-            n.y += existingBounds.maxY + config.vGap;
+          if (startNew) {
+            // New column: place to the right of existing
+            for (const n of nodesToPlace) {
+              n.x += existingBounds.maxX + config.hGap;
+              n.y += existingBounds.minY;
+            }
+          } else {
+            // Default: stack below existing, same X
+            for (const n of nodesToPlace) {
+              n.x += existingBounds.minX;
+              n.y += existingBounds.maxY + config.vGap;
+            }
           }
         } else if (config.layout === 'horizontal') {
-          // Align Y with existing, append to the right
-          for (const n of nodesToPlace) {
-            n.x += existingBounds.maxX + config.hGap;
-            n.y += existingBounds.minY;
+          if (startNew) {
+            // New row: place below existing
+            for (const n of nodesToPlace) {
+              n.x += existingBounds.minX;
+              n.y += existingBounds.maxY + config.vGap;
+            }
+          } else {
+            // Default: append to the right of existing, same Y
+            for (const n of nodesToPlace) {
+              n.x += existingBounds.maxX + config.hGap;
+              n.y += existingBounds.minY;
+            }
           }
         } else {
           // Grid/masonry: rearrange all for correct placement
@@ -440,6 +471,9 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
         }
       }
     }
+
+    // Reorder children so layers panel matches visual reading order
+    reorderChildrenByVisualPosition(section);
 
     // Update config and resize
     updateSectionConfig(section, config);

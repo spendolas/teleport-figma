@@ -363,6 +363,15 @@
     </label>
   </div>
 
+  <!-- Start new row/column (conditional) -->
+  <div class="field hidden" id="startNewField">
+    <label class="checkbox-label">
+      <input type="checkbox" id="startNew">
+      <span class="checkmark"></span>
+      <span id="startNewLabel">Start new row</span>
+    </label>
+  </div>
+
   <!-- Action buttons -->
   <div class="button-group">
     <button class="btn-primary" id="btnTeleport" disabled>Teleport</button>
@@ -398,6 +407,9 @@
   const elVGap = document.getElementById('vGap');
   const elRearrangeField = document.getElementById('rearrangeField');
   const elRearrange = document.getElementById('rearrange');
+  const elStartNewField = document.getElementById('startNewField');
+  const elStartNew = document.getElementById('startNew');
+  const elStartNewLabel = document.getElementById('startNewLabel');
   const elBtnTeleport = document.getElementById('btnTeleport');
   const elBtnCopy = document.getElementById('btnCopy');
 
@@ -418,11 +430,13 @@
     elMasonryField.classList.toggle('hidden', !isGrid);
 
     // Spacing: horizontal shows only H gap, vertical shows only V gap, grid shows both
+    // When startNew is checked, also show the cross-axis gap
+    const startNewChecked = elStartNew.checked;
     if (isHorizontal) {
       elHGapField.classList.remove('hidden');
-      elVGapField.classList.add('hidden');
+      elVGapField.classList.toggle('hidden', !startNewChecked);
     } else if (isVertical) {
-      elHGapField.classList.add('hidden');
+      elHGapField.classList.toggle('hidden', !startNewChecked);
       elVGapField.classList.remove('hidden');
     } else {
       elHGapField.classList.remove('hidden');
@@ -434,6 +448,9 @@
 
     // Rearrange: only when existing section + settings differ
     updateRearrangeVisibility();
+
+    // Start new row/column: only for H/V + existing section + not rearranging
+    updateStartNewVisibility();
 
     requestResize();
   }
@@ -455,6 +472,19 @@
       current.vGap !== storedConfig.vGap;
     elRearrangeField.classList.toggle('hidden', !changed);
     if (!changed) elRearrange.checked = false;
+    requestResize();
+  }
+
+  function updateStartNewVisibility() {
+    const layout = getActiveLayout();
+    const isHV = layout === 'horizontal' || layout === 'vertical';
+    const isExisting = elSection.value !== '__new__' && elSection.value !== '__placeholder__';
+    const shouldShow = isHV && isExisting && !elRearrange.checked;
+
+    elStartNewField.classList.toggle('hidden', !shouldShow);
+    if (!shouldShow) elStartNew.checked = false;
+
+    elStartNewLabel.textContent = layout === 'vertical' ? 'Start new column' : 'Start new row';
     requestResize();
   }
 
@@ -490,6 +520,7 @@
     elMasonry.checked = !!config.masonry;
     elHGap.value = config.hGap != null ? config.hGap : 40;
     elVGap.value = config.vGap != null ? config.vGap : 200;
+    elStartNew.checked = !!config.startNew;
 
     updateFieldVisibility();
   }
@@ -534,6 +565,7 @@
         hGap: parseInt(elHGap.value) || 0,
         vGap: parseInt(elVGap.value) || 0,
         rearrange: elRearrange.checked,
+        startNew: elStartNew.checked,
       }
     }, '*');
   }
@@ -601,6 +633,16 @@
     el.addEventListener('input', updateRearrangeVisibility);
   });
   elMasonry.addEventListener('change', updateRearrangeVisibility);
+
+  // Rearrange change -> update startNew visibility (hide when rearranging)
+  elRearrange.addEventListener('change', () => {
+    updateStartNewVisibility();
+  });
+
+  // Start new change -> update gap field visibility (show cross-axis gap)
+  elStartNew.addEventListener('change', () => {
+    updateFieldVisibility();
+  });
 
   // Action buttons
   elBtnTeleport.addEventListener('click', () => doTeleport('move'));
